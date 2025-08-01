@@ -1,0 +1,24 @@
+[project]
+name = "memory-lane"
+version = "0.1.0"
+description = "A project to organize and relive memories through pictures."
+authors = [{ name = "Your Name", email = "your@email.com" }]
+requires-python = ">=3.8"
+dependencies = [
+    "pydantic",
+    "pillow-heif",
+    "hachoir",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest",
+    "uv",
+    "Pillow",
+]
+
+[project.scripts]
+memory-lane = "memory_lane.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
