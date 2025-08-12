@@ -83,11 +83,10 @@ bump-version-major:
 set-version:
 	test ! -z "${VERSION}"
 	sed -i 's/\(^\|.*:\)__version__ = .*/__version__ = "${VERSION}"/' ${version_file1}
-	sed -i 's/\(^\|.*:\)__version__ = .*/__version__ = "${VERSION}"/' ${version_file2}
 
 commit-tag-version:
 	# git tag --list | grep -qix "${VERSION}"
-	git commit -m "Version ${VERSION}" --no-verify ${version_file1} ${version_file2}
+	git commit -m "Version ${VERSION}" --no-verify ${version_file1}
 	git tag '${package}-${VERSION}'
 
 ## Clean
