@@ -1,9 +1,10 @@
-
-from pathlib import Path
 from datetime import DateTime
-from PIL import Image, ExifTags
+from pathlib import Path
 
-def get_capture_timedate(file_path:Path) -> None | DateTime:
+from PIL import ExifTags, Image
+
+
+def get_capture_timedate(file_path: Path) -> None | DateTime:
 
     with Image.open(file_path) as img:
         exif = img.getexif()

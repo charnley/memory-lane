@@ -1,22 +1,12 @@
-"""
-__main__.py
-
-CLI entry point for Memory Lane.
-Provides commands for finding duplicate media files and renaming files based on metadata.
-"""
 import argparse
 import sys
 from pathlib import Path
-from .image_manager import find_duplicate_images, rename_image, SUPPORTED_EXTENSIONS
+
+# from .image_manager import find_duplicate_images, rename_image, SUPPORTED_EXTENSIONS
+
 
 def main(argv=None):
-    """
-    Main function for the Memory Lane CLI.
-    Handles command-line arguments and dispatches to appropriate functionality.
 
-    Args:
-        argv (list, optional): List of command-line arguments. Defaults to None (uses sys.argv).
-    """
     if argv is None:
         argv = sys.argv[1:]
 
@@ -27,29 +17,23 @@ def main(argv=None):
 
     # find-duplicates command
     parser_find_duplicates = subparsers.add_parser(
-        "find-duplicates",
-        help="Find duplicate media files in a folder based on file content."
+        "find-duplicates", help="Find duplicate media files in a folder based on file content."
     )
     parser_find_duplicates.add_argument(
-        "folder",
-        type=Path,
-        help="Path to the folder to search for duplicate files."
+        "folder", type=Path, help="Path to the folder to search for duplicate files."
     )
 
     # rename command
     parser_rename = subparsers.add_parser(
-        "rename",
-        help="Rename media files in a folder based on their creation date and author."
+        "rename", help="Rename media files in a folder based on their creation date and author."
     )
     parser_rename.add_argument(
-        "folder",
-        type=Path,
-        help="Path to the folder containing files to rename."
+        "folder", type=Path, help="Path to the folder containing files to rename."
     )
     parser_rename.add_argument(
         "--author",
         type=str,
-        help="Override author name for all files. If not provided, uses metadata if available."
+        help="Override author name for all files. If not provided, uses metadata if available.",
     )
 
     args = parser.parse_args(argv)
@@ -81,6 +65,7 @@ def main(argv=None):
                     print(f"Renamed {file_path.name} to {new_path.name}")
                     renamed_count += 1
         print(f"Finished. Renamed {renamed_count} file(s).")
+
 
 if __name__ == "__main__":
     main()

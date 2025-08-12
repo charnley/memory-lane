@@ -1,19 +1,18 @@
-
-import os
 import logging
+import os
+from datetime import datetime
 from hashlib import md5
 from pathlib import Path
 from typing import Dict, List, Optional
-from PIL import Image, ExifTags
-from datetime import datetime
+
 import pillow_heif
-from hachoir.parser import createParser
 from hachoir.metadata import extractMetadata
+from hachoir.parser import createParser
 from hachoir.stream import InputIOStream
-from pathlib import Path
+from PIL import ExifTags, Image
 
 from memory_lane import image_funcs
-from memory_lane.constants import VIDEO_EXTENSIONS, IMAGE_EXTENSIONS
+from memory_lane.constants import IMAGE_EXTENSIONS, VIDEO_EXTENSIONS
 
 # Register HEIF/HEIC support for Pillow
 pillow_heif.register_heif_opener()
@@ -101,4 +100,3 @@ def rename_file(path: Path, author_override: Optional[str] = None) -> Path:
     except Exception as e:
         logging.error(f"Failed to rename {image_path.name}: {e}")
         return image_path
-

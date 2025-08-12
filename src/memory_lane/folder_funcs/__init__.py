@@ -1,4 +1,3 @@
-
 def find_duplicate_images(folder_path: Path) -> Dict[str, List[Path]]:
     """
     Find duplicate media files in a folder based on their content hash.

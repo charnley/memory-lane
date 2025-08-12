@@ -13,6 +13,7 @@ from matplotlib.offsetbox import AnnotationBbox, OffsetImage
 from matplotlib.textpath import TextPath
 from PIL import Image
 from PIL.Image import Image as PilImage
+
 from .constants import (
     DATE_FORMAT,
     FONT_FAMILY,
