@@ -1,0 +1,17 @@
+basemap
+build
+jupyterlab
+jupytext
+matplotlib
+monkeytype
+mypy
+numpy
+pandas
+pip
+pre-commit
+pylint
+pytest
+pytest-cov
+qmllib
+scipy
+twine
