@@ -1,28 +1,27 @@
+from pathlib import Path
 
 from hachoir.metadata import extractMetadata
 from hachoir.parser import createParser
-from hachoir.stream import InputIOStream
 
 DATE_PROPERTY = "creation_date"
 
-def get_capture_datetime(file_path: Path) -> None | DateTime:
+# TODO Not possible to get device information?
 
-    with open(file_path, 'rb') as f:
-        stream = InputIOStream(f)
-        parser = createParser(stream)
-        metadata = extractMetadata(parser)
 
-        if not metadata:
-            return None
+def get_capture_datetime(file_path: Path):
 
-        if not metadata.has(DATE_PROPERTY):
-            return None
+    parser = createParser(str(file_path))
+    metadata = extractMetadata(parser)
 
-        time = metadata.get(DATE_PROPERTY)
+    if not metadata:
+        return None
 
-        if time is None:
-            return None
+    if not metadata.has(DATE_PROPERTY):
+        return None
 
-        # Get real datetime obj
+    time = metadata.get(DATE_PROPERTY)
 
-    return datetime.
+    if time is None:
+        return None
+
+    return time
