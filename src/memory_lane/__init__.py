@@ -53,10 +53,30 @@ def get_filename_hash(filename):
 
 
 def cut_duplicates(pdf):
+    groups = pdf.groupby(COLUMN_HASH)
+    unique_rows = []
+    duplicate_rows = []
 
-    duplicates = pd.DataFrame()
+    for hash_val, group in groups:
+        if len(group) == 1:
+            unique_rows.append(group.iloc[0])
+            continue
 
-    return duplicates, pdf
+        metadata_cols = [COLUMN_DATETIME, COLUMN_AUTHOR]
+        non_null_counts = group[metadata_cols].notnull().sum(axis=1)
+
+        best_idx = non_null_counts.idxmax()
+        best_row = group.loc[best_idx]
+        unique_rows.append(best_row)
+
+        for idx, row in group.iterrows():
+            if idx != best_idx:
+                continue
+            duplicate_rows.append(row)
+
+    unique_df = pd.DataFrame(unique_rows)
+    duplicates_df = pd.DataFrame(duplicate_rows)
+    return duplicates_df, unique_df
 
 
 def get_best_name(row):
