@@ -1,7 +1,10 @@
 import hashlib
-from pathlib import Path
+from pathlib import Path, PosixPath
+from typing import Tuple
 
 import pandas as pd
+from pandas.core.frame import DataFrame
+from pandas.core.series import Series
 
 from memory_lane.constants import (
     COLUMN_AUTHOR,
@@ -18,7 +21,7 @@ from memory_lane.image_funcs import get_device_fingerprint
 BUF_SIZE = 65536
 
 
-def enumerate_files(dir) -> pd.DataFrame:
+def enumerate_files(dir: PosixPath) -> pd.DataFrame:
 
     file_names = []
 
@@ -41,7 +44,7 @@ def enumerate_files(dir) -> pd.DataFrame:
     return pdf
 
 
-def get_filename_hash(filename):
+def get_filename_hash(filename: PosixPath) -> str:
     sha1 = hashlib.sha1()
     with open(filename, "rb") as f:
         while True:
@@ -52,7 +55,7 @@ def get_filename_hash(filename):
     return sha1.hexdigest()
 
 
-def cut_duplicates(pdf):
+def cut_duplicates(pdf: DataFrame) -> Tuple[DataFrame, DataFrame]:
     groups = pdf.groupby(COLUMN_HASH)
     unique_rows = []
     duplicate_rows = []
@@ -79,7 +82,7 @@ def cut_duplicates(pdf):
     return duplicates_df, unique_df
 
 
-def get_best_name(row):
+def get_best_name(row: Series) -> str:
 
     if isinstance(row[COLUMN_DATETIME], pd.Timestamp):
         str_date = row[COLUMN_DATETIME].strftime(DATE_FORMAT)

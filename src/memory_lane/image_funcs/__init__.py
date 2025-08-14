@@ -1,6 +1,6 @@
+import datetime
 import hashlib
-from datetime import datetime
-from pathlib import Path
+from pathlib import Path, PosixPath
 
 import pillow_heif
 from PIL import ExifTags, Image
@@ -16,7 +16,7 @@ def get_image_metadata():
     return
 
 
-def get_capture_datetime(file_path: Path):
+def get_capture_datetime(file_path: Path) -> datetime.datetime:
 
     with Image.open(file_path) as img:
         exif = img.getexif()
@@ -29,10 +29,10 @@ def get_capture_datetime(file_path: Path):
     if not creation_time_str:
         return None
 
-    return datetime.strptime(creation_time_str, "%Y:%m:%d %H:%M:%S")
+    return datetime.datetime.strptime(creation_time_str, "%Y:%m:%d %H:%M:%S")
 
 
-def get_device_fingerprint(file_path):
+def get_device_fingerprint(file_path: PosixPath):
 
     if file_path.suffix not in IMAGE_EXTENSIONS:
         return None
