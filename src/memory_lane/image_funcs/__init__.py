@@ -16,7 +16,7 @@ def get_image_metadata():
     return
 
 
-def get_capture_datetime(file_path: Path) -> datetime.datetime:
+def get_capture_datetime(file_path: Path) -> datetime.datetime | None:
 
     with Image.open(file_path) as img:
         exif = img.getexif()

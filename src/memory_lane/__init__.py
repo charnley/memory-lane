@@ -1,6 +1,6 @@
 import hashlib
 from pathlib import Path, PosixPath
-from typing import Tuple
+from typing import Any, Tuple
 
 import pandas as pd
 from pandas.core.frame import DataFrame
@@ -55,9 +55,9 @@ def get_filename_hash(filename: PosixPath) -> str:
     return sha1.hexdigest()
 
 
-def cut_duplicates(pdf: DataFrame) -> Tuple[DataFrame, DataFrame]:
+def cut_duplicates(pdf: DataFrame) -> tuple[DataFrame, DataFrame]:
     groups = pdf.groupby(COLUMN_HASH)
-    unique_rows = []
+    unique_rows: list[Any] = []
     duplicate_rows = []
 
     for hash_val, group in groups:
