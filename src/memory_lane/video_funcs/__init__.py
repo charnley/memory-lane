@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from hachoir.metadata import extractMetadata
-from hachoir.parser import createParser
+from hachoir.metadata import extractMetadata  # type: ignore
+from hachoir.parser import createParser  # type: ignore
 
 DATE_PROPERTY = "creation_date"
 

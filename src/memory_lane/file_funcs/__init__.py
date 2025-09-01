@@ -5,9 +5,9 @@ from hashlib import md5
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from hachoir.metadata import extractMetadata
-from hachoir.parser import createParser
-from hachoir.stream import InputIOStream
+from hachoir.metadata import extractMetadata  # type: ignore
+from hachoir.parser import createParser  # type: ignore
+from hachoir.stream import InputIOStream  # type: ignore
 from PIL import ExifTags, Image
 
 from memory_lane import image_funcs, video_funcs
@@ -41,4 +41,3 @@ def get_datetime(file_path: Path) -> Optional[datetime.datetime]:
 
 def rename_file(path1: Path, path2: Path):
     path1.rename(path2)
-    return

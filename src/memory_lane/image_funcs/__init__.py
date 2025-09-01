@@ -2,7 +2,7 @@ import datetime
 import hashlib
 from pathlib import Path, PosixPath
 
-import pillow_heif
+import pillow_heif  # type: ignore
 from PIL import ExifTags, Image
 
 from memory_lane.constants import EXIF_DEVICE, EXIF_DEVICE_FINGERPRINT, IMAGE_EXTENSIONS
@@ -44,8 +44,8 @@ def get_device_fingerprint(file_path: PosixPath):
             return None
 
         device_model = exif.get(ExifTags.Base.Model)
-        device_make = exif.get(ExifTags.Base.Make)
-        device_software = exif.get(ExifTags.Base.Software)
+        # device_make = exif.get(ExifTags.Base.Make)
+        # device_software = exif.get(ExifTags.Base.Software)
 
     # fp = {
     #     EXIF_DEVICE: device_model,

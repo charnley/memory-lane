@@ -5,4 +5,4 @@ def get_device_fingerprint(image: PilImage) -> str:
 
     # Get exif information
 
-    return
+    return "hello"

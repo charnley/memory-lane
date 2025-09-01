@@ -102,8 +102,8 @@ def get_basic_text(
     (fig, ax) = get_figure(width=width, height=height)
 
     font_size = calculate_fontsize(fig, ax, font=font)
-    text = textwrap.wrap(text, width=TEXT_LENGTH)
-    font_size_text = font_size * (TEXT_LENGTH / len(text[0]))
+    _text = textwrap.wrap(text, width=TEXT_LENGTH)
+    font_size_text = font_size * (TEXT_LENGTH / len(_text[0]))
 
     ax.text(
         0.5,
@@ -126,7 +126,7 @@ def get_basic_text(
             bbox=dict(facecolor="black"),
             color="white",
             fontsize=font_size - 5,
-            **FONT_MONO,
+            **FONT_MONO,  # type: ignore
         )
 
     ax.axis("off")

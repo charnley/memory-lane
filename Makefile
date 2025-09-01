@@ -20,6 +20,7 @@ init:
 	make .venv
 	uv pip install -r ./requirements.txt
 	uv pip install -e ".[test]"
+	# ${python} -m mypy --install-types
 	make .git/hooks/pre-commit
 
 .git/hooks/pre-commit:
