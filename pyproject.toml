@@ -5,17 +5,18 @@ description = "A project to organize and relive memories through pictures."
 authors = [{ name = "Your Name", email = "your@email.com" }]
 requires-python = ">=3.8"
 dependencies = [
-    "pydantic",
-    "pillow-heif",
     "hachoir",
+    "pillow-heif",
+    "pydantic",
 ]
 
 [project.optional-dependencies]
 test = [
-    "pytest",
-    "pandas-stubs",
-    "uv",
     "Pillow",
+    "pandas-stubs",
+    "pytest",
+    "types-requests",
+    "uv",
 ]
 
 [project.scripts]
