@@ -1,8 +1,24 @@
 import textwrap
 
-from .map import draw_map
+from .map import (
+    PALETTE_BLUEPRINT,
+    PALETTE_INK,
+    PALETTE_SEPIA,
+    ElevationGrid,
+    draw_map,
+    get_elevation_grid,
+    plot_points,
+)
 
-__all__ = ["draw_map"]
+__all__ = [
+    "draw_map",
+    "plot_points",
+    "get_elevation_grid",
+    "ElevationGrid",
+    "PALETTE_SEPIA",
+    "PALETTE_INK",
+    "PALETTE_BLUEPRINT",
+]
 from datetime import datetime
 from functools import lru_cache
 from io import BytesIO
