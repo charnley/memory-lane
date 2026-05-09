@@ -15,17 +15,20 @@ Typical usage::
     )
 
     grid = get_elevation_grid(center=(59.9, 10.7), zoom=10)
+    p = PALETTE_SEPIA
 
     fig, ax = plt.subplots(figsize=(10, 10))
-    fig.patch.set_facecolor(PALETTE_SEPIA["bg"])
-    ax.set_facecolor(PALETTE_SEPIA["bg"])
+    fig.patch.set_facecolor(p.bg)
+    ax.set_facecolor(p.bg)
 
-    draw_map(ax, grid, palette=PALETTE_SEPIA)
-    plot_points(ax, [(59.91, 10.75)], palette=PALETTE_SEPIA)
+    draw_map(ax, grid, color=p.line_color, bg=p.bg)
+    plot_points(ax, [(59.91, 10.75)], color=p.point_color, edgecolor=p.bg)
 
     fig.tight_layout()
     fig.savefig("map.png", dpi=150, bbox_inches="tight")
 """
+
+from __future__ import annotations
 
 import hashlib
 import json
@@ -37,27 +40,37 @@ from typing import Optional
 
 import numpy as np
 import requests
+from matplotlib import patheffects
 from matplotlib.axes import Axes
 
 # ---------------------------------------------------------------------------
-# Palettes — user may define their own dict with the same keys
+# Palette dataclass
 # ---------------------------------------------------------------------------
 
-PALETTE_SEPIA: dict[str, str] = dict(
+
+@dataclass
+class Palette:
+    bg: str
+    line_color: str
+    point_color: str
+    title_color: str
+
+
+PALETTE_SEPIA = Palette(
     bg="#f5f0e8",
     line_color="#5c4a2a",
     point_color="#8b2020",
     title_color="#3a2a10",
 )
 
-PALETTE_INK: dict[str, str] = dict(
+PALETTE_INK = Palette(
     bg="#ffffff",
     line_color="#1a1a1a",
     point_color="#cc0000",
     title_color="#000000",
 )
 
-PALETTE_BLUEPRINT: dict[str, str] = dict(
+PALETTE_BLUEPRINT = Palette(
     bg="#1a2a4a",
     line_color="#a8c8f0",
     point_color="#ffcc00",
@@ -158,6 +171,11 @@ def _fetch_elevations(locations: list[tuple[float, float]]) -> list[Optional[flo
     return results
 
 
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+
 def get_elevation_grid(
     center: tuple[float, float],
     zoom: int,
@@ -217,7 +235,8 @@ def get_elevation_grid(
 def draw_map(
     ax: Axes,
     grid: ElevationGrid,
-    palette: dict[str, str] = PALETTE_SEPIA,
+    color: str = PALETTE_SEPIA.line_color,
+    bg: str = PALETTE_SEPIA.bg,
 ) -> None:
     """Draw contour lines for terrain elevation onto ax.
 
@@ -227,7 +246,8 @@ def draw_map(
     ----------
     ax : matplotlib Axes
     grid : ElevationGrid from get_elevation_grid()
-    palette : color dict with keys bg, line_color, point_color, title_color
+    color : contour line color
+    bg : background color (used for label halos)
     """
     elev_min = np.nanmin(grid.elev)
     elev_max = np.nanmax(grid.elev)
@@ -241,7 +261,7 @@ def draw_map(
         grid.lats,
         grid.elev,
         levels=levels,
-        colors=palette["line_color"],
+        colors=color,
         linewidths=0.4,
         alpha=0.5,
     )
@@ -250,7 +270,7 @@ def draw_map(
         grid.lats,
         grid.elev,
         levels=levels[::5],
-        colors=palette["line_color"],
+        colors=color,
         linewidths=1.0,
         alpha=0.85,
     )
@@ -258,7 +278,7 @@ def draw_map(
         cs_major,
         fmt="%dm",
         fontsize=6,
-        colors=palette["line_color"],
+        colors=color,
         inline=True,
         inline_spacing=2,
     )
@@ -273,8 +293,11 @@ def draw_map(
 def plot_points(
     ax: Axes,
     points: list[tuple[float, float]],
-    palette: dict[str, str] = PALETTE_SEPIA,
-    size: float = 40,
+    color: str = PALETTE_SEPIA.point_color,
+    edgecolor: str = PALETTE_SEPIA.bg,
+    size: float = 80,
+    labels: list[str] | None = None,
+    connect: bool = False,
 ) -> None:
     """Overlay GPS points onto ax.
 
@@ -282,19 +305,49 @@ def plot_points(
     ----------
     ax : matplotlib Axes
     points : list of (lat, lon)
-    palette : color dict — uses point_color and bg keys
+    color : marker fill color and label/line color
+    edgecolor : marker edge color; also used as halo for lines and labels
     size : marker size
+    labels : optional list of strings, one per point; empty string skips label
+    connect : if True, draw a line through points in order
     """
     if not points:
         return
+
+    if labels is not None and len(labels) != len(points):
+        raise ValueError(f"labels length {len(labels)} != points length {len(points)}")
+
     lats = [p[0] for p in points]
     lons = [p[1] for p in points]
+
+    if connect:
+        # halo line underneath
+        ax.plot(lons, lats, color=edgecolor, linewidth=3.0, alpha=0.9, zorder=3)
+        ax.plot(lons, lats, color=color, linewidth=1.0, alpha=0.7, zorder=4)
+
     ax.scatter(
         lons,
         lats,
-        color=palette["point_color"],
+        color=color,
         s=size,
         zorder=5,
-        linewidths=0.8,
-        edgecolors=palette["bg"],
+        linewidths=1.2,
+        edgecolors=edgecolor,
     )
+
+    if labels:
+        for lat, lon, label in zip(lats, lons, labels):
+            if not label:
+                continue
+            ax.annotate(
+                label,
+                xy=(lon, lat),
+                xytext=(0, 8),
+                textcoords="offset points",
+                ha="center",
+                va="bottom",
+                fontsize=9,
+                color=color,
+                zorder=6,
+                path_effects=[patheffects.withStroke(linewidth=2.5, foreground=edgecolor)],
+            )
