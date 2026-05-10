@@ -32,8 +32,6 @@ Typical usage::
     fig.savefig("map.png", dpi=150, bbox_inches="tight")
 """
 
-from __future__ import annotations
-
 import hashlib
 import json
 import math
