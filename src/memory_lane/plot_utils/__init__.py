@@ -7,12 +7,14 @@ from .map import (
     ElevationGrid,
     Palette,
     draw_map,
+    draw_water,
     get_elevation_grid,
     plot_points,
 )
 
 __all__ = [
     "draw_map",
+    "draw_water",
     "plot_points",
     "get_elevation_grid",
     "ElevationGrid",

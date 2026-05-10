@@ -1,4 +1,7 @@
 basemap
+cartopy
+shapely
+requests
 build
 jupyterlab
 jupytext

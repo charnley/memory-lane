@@ -2,7 +2,9 @@
 Artistic elevation map using contour lines.
 No country borders — pure terrain art.
 
-Data: OpenTopoData SRTM 90m API (https://www.opentopodata.org/)
+Data sources:
+- Elevation: OpenTopoData API (https://www.opentopodata.org/)
+- Water: Natural Earth via cartopy (bundled, cached locally)
 
 Typical usage::
 
@@ -10,6 +12,7 @@ Typical usage::
     from memory_lane.plot_utils.map import (
         get_elevation_grid,
         draw_map,
+        draw_water,
         plot_points,
         PALETTE_SEPIA,
     )
@@ -22,6 +25,7 @@ Typical usage::
     ax.set_facecolor(p.bg)
 
     draw_map(ax, grid, color=p.line_color, bg=p.bg)
+    draw_water(ax, center=(59.9, 10.7), zoom=10, color=p.bg, edgecolor=p.line_color)
     plot_points(ax, [(59.91, 10.75)], color=p.point_color, edgecolor=p.bg)
 
     fig.tight_layout()
@@ -38,10 +42,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+import cartopy.feature as cfeature  # type: ignore
 import numpy as np
 import requests
 from matplotlib import patheffects
 from matplotlib.axes import Axes
+from matplotlib.colors import LinearSegmentedColormap
+from matplotlib.patches import PathPatch
+from matplotlib.path import Path as MplPath
+from shapely.geometry import MultiPolygon, Polygon, box
 
 # ---------------------------------------------------------------------------
 # Palette dataclass
@@ -81,10 +90,18 @@ PALETTE_BLUEPRINT = Palette(
 # Internal constants
 # ---------------------------------------------------------------------------
 
-OPENTOPODATA_URL = "https://api.opentopodata.org/v1/srtm90m"
+OPENTOPODATA_BASE = "https://api.opentopodata.org/v1"
 API_BATCH_SIZE = 100
 API_RATE_LIMIT = 1.1  # seconds between batches (free tier: 1 req/s)
 CACHE_DIR = Path.home() / ".cache" / "memory_lane" / "elevation"
+
+# Dataset priority: best resolution first, widest coverage last
+# (lat_min, lat_max, lon_min, lon_max, dataset_name)
+_DATASET_COVERAGE: list[tuple[float, float, float, float, str]] = [
+    (34.0, 72.0, -25.0, 45.0, "eudem25m"),  # Europe, 25m
+    (-60.0, 60.0, -180.0, 180.0, "srtm90m"),  # Global within 60°, 90m
+    (-83.0, 83.0, -180.0, 180.0, "aster30m"),  # Global, 30m
+]
 
 
 # ---------------------------------------------------------------------------
@@ -100,10 +117,11 @@ class ElevationGrid:
     center: tuple[float, float]
     zoom: int
     grid_size: int
+    datasets: list[str]  # datasets actually used, in order of application
 
 
 # ---------------------------------------------------------------------------
-# Private helpers
+# Private helpers — elevation
 # ---------------------------------------------------------------------------
 
 
@@ -140,6 +158,7 @@ def _load_cache(key: str) -> Optional[ElevationGrid]:
         center=tuple(m["center"]),  # type: ignore[arg-type]
         zoom=m["zoom"],
         grid_size=grid_size,
+        datasets=m.get("datasets", []),
     )
 
 
@@ -150,25 +169,141 @@ def _save_cache(key: str, grid: ElevationGrid, bounds: dict) -> None:
         "center": list(grid.center),
         "zoom": grid.zoom,
         "grid_size": grid.grid_size,
+        "datasets": grid.datasets,
         **bounds,
     }
     with (CACHE_DIR / f"{key}.json").open("w") as f:
         json.dump(meta, f)
 
 
-def _fetch_elevations(locations: list[tuple[float, float]]) -> list[Optional[float]]:
-    """Fetch elevations from OpenTopoData API, batched."""
+def _dataset_priority(lat_min: float, lat_max: float, lon_min: float, lon_max: float) -> list[str]:
+    """Return ordered list of datasets to try for this bbox, best-first."""
+    datasets = []
+    for dlat_min, dlat_max, dlon_min, dlon_max, name in _DATASET_COVERAGE:
+        if (
+            lat_min >= dlat_min
+            and lat_max <= dlat_max
+            and lon_min >= dlon_min
+            and lon_max <= dlon_max
+        ):
+            datasets.append(name)
+    if "aster30m" not in datasets:
+        datasets.append("aster30m")
+    return datasets
+
+
+def _fetch_elevations(locations: list[tuple[float, float]], dataset: str) -> list[Optional[float]]:
+    """Fetch elevations from OpenTopoData API for a specific dataset, batched."""
+    url = f"{OPENTOPODATA_BASE}/{dataset}"
     results: list[Optional[float]] = []
     for i in range(0, len(locations), API_BATCH_SIZE):
         batch = locations[i : i + API_BATCH_SIZE]
         loc_str = "|".join(f"{lat},{lon}" for lat, lon in batch)
-        resp = requests.get(OPENTOPODATA_URL, params={"locations": loc_str}, timeout=30)
+        resp = requests.get(url, params={"locations": loc_str}, timeout=30)
         resp.raise_for_status()
         for r in resp.json()["results"]:
             results.append(r.get("elevation"))
         if i + API_BATCH_SIZE < len(locations):
             time.sleep(API_RATE_LIMIT)
     return results
+
+
+def _fetch_elevations_with_fallback(
+    locations: list[tuple[float, float]],
+    datasets: list[str],
+) -> tuple[list[float], list[str]]:
+    """Fetch elevations using dataset priority, falling back for null points.
+
+    Returns (elevations, datasets_used).
+    """
+    results: list[Optional[float]] = [None] * len(locations)
+    remaining_idx = list(range(len(locations)))
+    datasets_used: list[str] = []
+
+    for dataset in datasets:
+        if not remaining_idx:
+            break
+        batch = [locations[i] for i in remaining_idx]
+        n_batches = math.ceil(len(batch) / API_BATCH_SIZE)
+        print(f"Fetching {len(batch)} elevation points via {dataset} ({n_batches} requests)...")
+        fetched = _fetch_elevations(batch, dataset=dataset)
+        datasets_used.append(dataset)
+        still_null = []
+        for i, val in zip(remaining_idx, fetched):
+            if val is not None:
+                results[i] = val
+            else:
+                still_null.append(i)
+        remaining_idx = still_null
+
+    for i in remaining_idx:
+        results[i] = 0.0
+
+    return [r if r is not None else 0.0 for r in results], datasets_used
+
+
+# ---------------------------------------------------------------------------
+# Private helpers — water
+# ---------------------------------------------------------------------------
+
+
+def _shapely_to_mpl_path(geom) -> Optional[MplPath]:
+    """Convert shapely Polygon or MultiPolygon to matplotlib Path."""
+    if geom.is_empty:
+        return None
+    if isinstance(geom, Polygon):
+        polys = [geom]
+    elif isinstance(geom, MultiPolygon):
+        polys = list(geom.geoms)
+    else:
+        return None
+
+    verts = []
+    codes = []
+    for poly in polys:
+        ext = list(poly.exterior.coords)
+        verts += ext + [ext[0]]
+        codes += [MplPath.MOVETO] + [MplPath.LINETO] * (len(ext) - 1) + [MplPath.CLOSEPOLY]
+        for interior in poly.interiors:
+            ring = list(interior.coords)
+            verts += ring + [ring[0]]
+            codes += [MplPath.MOVETO] + [MplPath.LINETO] * (len(ring) - 1) + [MplPath.CLOSEPOLY]
+
+    return MplPath(verts, codes)
+
+
+def _draw_natural_earth_feature(
+    ax: Axes,
+    feature: cfeature.NaturalEarthFeature,
+    bbox,
+    color: str,
+    edgecolor: str,
+    zorder: int,
+    alpha: float = 0.9,
+    linewidth: float = 0.5,
+) -> None:
+    """Clip a cartopy NaturalEarth feature to bbox and draw onto ax."""
+    for geom in feature.geometries():
+        try:
+            clipped = geom.intersection(bbox)
+        except Exception:
+            continue
+        if clipped.is_empty:
+            continue
+        mpl_path = _shapely_to_mpl_path(clipped)
+        if mpl_path is None:
+            continue
+        ax.add_patch(
+            PathPatch(
+                mpl_path,
+                facecolor=color,
+                edgecolor=edgecolor,
+                linewidth=linewidth,
+                alpha=alpha,
+                zorder=zorder,
+                transform=ax.transData,
+            )
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -211,13 +346,10 @@ def get_elevation_grid(
         (grid_lats[r, c], grid_lons[r, c]) for r in range(grid_size) for c in range(grid_size)
     ]
 
-    n_batches = math.ceil(len(locations) / API_BATCH_SIZE)
-    print(f"Fetching {len(locations)} elevation points ({n_batches} API requests)...")
-    elevations_flat = _fetch_elevations(locations)
+    datasets = _dataset_priority(lat_min, lat_max, lon_min, lon_max)
+    elevations_flat, datasets_used = _fetch_elevations_with_fallback(locations, datasets)
 
-    elev = np.array([e if e is not None else 0.0 for e in elevations_flat], dtype=float).reshape(
-        grid_size, grid_size
-    )
+    elev = np.array(elevations_flat, dtype=float).reshape(grid_size, grid_size)
 
     grid = ElevationGrid(
         lons=grid_lons,
@@ -226,6 +358,7 @@ def get_elevation_grid(
         center=center,
         zoom=zoom,
         grid_size=grid_size,
+        datasets=datasets_used,
     )
     bounds = dict(lat_min=lat_min, lat_max=lat_max, lon_min=lon_min, lon_max=lon_max)
     _save_cache(key, grid, bounds)
@@ -237,8 +370,12 @@ def draw_map(
     grid: ElevationGrid,
     color: str = PALETTE_SEPIA.line_color,
     bg: str = PALETTE_SEPIA.bg,
+    hypsometric: bool = True,
 ) -> None:
-    """Draw contour lines for terrain elevation onto ax.
+    """Draw terrain elevation onto ax.
+
+    Renders hypsometric tint (colour-filled elevation bands) with sparse
+    contour lines overlaid — major every 100 m (labelled), minor every 50 m.
 
     Caller is responsible for: fig/ax creation, facecolor, spines, save.
 
@@ -247,47 +384,104 @@ def draw_map(
     ax : matplotlib Axes
     grid : ElevationGrid from get_elevation_grid()
     color : contour line color
-    bg : background color (used for label halos)
+    bg : background color; also used as the lowest-elevation tint
+    hypsometric : if True (default) draw colour-filled elevation bands under
+        the contours; if False draw contour lines only (sparse style)
     """
-    elev_min = np.nanmin(grid.elev)
-    elev_max = np.nanmax(grid.elev)
-    elev_range = elev_max - elev_min if elev_max > elev_min else 1.0
+    elev = grid.elev
+    elev_min = np.nanmin(elev)
+    elev_max = np.nanmax(elev)
 
-    n_levels = max(8, min(40, int(elev_range / 20)))
-    levels = np.linspace(elev_min, elev_max, n_levels)
+    major_step = 100.0
+    minor_step = 50.0
+    major_levels = np.arange(np.ceil(elev_min / major_step) * major_step, elev_max, major_step)
+    minor_levels = np.arange(np.ceil(elev_min / minor_step) * minor_step, elev_max, minor_step)
+    minor_levels = minor_levels[~np.isin(minor_levels, major_levels)]
 
-    ax.contour(
-        grid.lons,
-        grid.lats,
-        grid.elev,
-        levels=levels,
-        colors=color,
-        linewidths=0.4,
-        alpha=0.5,
-    )
-    cs_major = ax.contour(
-        grid.lons,
-        grid.lats,
-        grid.elev,
-        levels=levels[::5],
-        colors=color,
-        linewidths=1.0,
-        alpha=0.85,
-    )
-    ax.clabel(
-        cs_major,
-        fmt="%dm",
-        fontsize=6,
-        colors=color,
-        inline=True,
-        inline_spacing=2,
-    )
+    if hypsometric:
+        # Sepia-family gradient: warm lowland → cool-grey highland
+        colors_hyp = [bg, "#d4c5a9", "#b8a882", "#8a7a5a", "#7a8070", "#d0d4d0"]
+        cmap = LinearSegmentedColormap.from_list("hyp", colors_hyp)
+        ax.contourf(
+            grid.lons,
+            grid.lats,
+            elev,
+            levels=40,
+            cmap=cmap,
+            alpha=0.80,
+            zorder=1,
+        )
+
+    if len(minor_levels):
+        ax.contour(
+            grid.lons,
+            grid.lats,
+            elev,
+            levels=minor_levels,
+            colors=color,
+            linewidths=0.35,
+            alpha=0.30,
+            zorder=2,
+        )
+    # if len(major_levels):
+    # cs = ax.contour(
+    #     grid.lons, grid.lats, elev,
+    #     levels=major_levels, colors=color,
+    #     linewidths=0.9, alpha=0.80, zorder=2,
+    # )
+    # ax.clabel(cs, fmt="%dm", fontsize=6, colors=color, inline=True, inline_spacing=2)
 
     half = _zoom_to_degrees(grid.zoom)
     lat0, lon0 = grid.center
     ax.set_xlim(lon0 - half, lon0 + half)
     ax.set_ylim(lat0 - half, lat0 + half)
     ax.set_aspect("equal")
+
+
+def draw_water(
+    ax: Axes,
+    center: tuple[float, float],
+    zoom: int,
+    color: str = PALETTE_SEPIA.bg,
+    edgecolor: str = PALETTE_SEPIA.line_color,
+) -> None:
+    """Draw ocean and lakes from Natural Earth data onto ax.
+
+    Uses cartopy's bundled Natural Earth shapefiles — no API calls.
+    Cartopy downloads and caches the shapefiles on first use
+    (~/.local/share/cartopy).
+
+    Draw after draw_map so water sits on top of contours.
+
+    Parameters
+    ----------
+    ax : matplotlib Axes
+    center : (lat, lon) — same as get_elevation_grid()
+    zoom : same zoom level — determines bbox
+    color : fill color for ocean and lakes
+    edgecolor : outline color
+    """
+    half = _zoom_to_degrees(zoom)
+    lat0, lon0 = center
+    bbox = box(lon0 - half, lat0 - half, lon0 + half, lat0 + half)
+
+    ocean = cfeature.NaturalEarthFeature(
+        "physical",
+        "ocean",
+        "10m",
+        facecolor=color,
+        edgecolor=edgecolor,
+    )
+    lakes = cfeature.NaturalEarthFeature(
+        "physical",
+        "lakes",
+        "10m",
+        facecolor=color,
+        edgecolor=edgecolor,
+    )
+
+    _draw_natural_earth_feature(ax, ocean, bbox, color=color, edgecolor=edgecolor, zorder=3)
+    _draw_natural_earth_feature(ax, lakes, bbox, color=color, edgecolor=edgecolor, zorder=3)
 
 
 def plot_points(
@@ -321,8 +515,7 @@ def plot_points(
     lons = [p[1] for p in points]
 
     if connect:
-        # halo line underneath
-        ax.plot(lons, lats, color=edgecolor, linewidth=3.0, alpha=0.9, zorder=3)
+        ax.plot(lons, lats, color=edgecolor, linewidth=3.0, alpha=0.9, zorder=4)
         ax.plot(lons, lats, color=color, linewidth=1.0, alpha=0.7, zorder=4)
 
     ax.scatter(

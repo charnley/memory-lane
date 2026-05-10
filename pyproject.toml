@@ -12,11 +12,12 @@ dependencies = [
 
 [project.optional-dependencies]
 test = [
+    "pip",
     "Pillow",
     "pandas-stubs",
     "pytest",
     "types-requests",
-    "uv",
+    "types-shapely",
 ]
 
 [project.scripts]
